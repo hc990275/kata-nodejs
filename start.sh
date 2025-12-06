@@ -2,9 +2,9 @@
 set -e
 
 # ================== 端口设置（你可以改） ==================
-export TUIC_PORT=0                  # 关闭 TUIC
-export HY2_PORT=              # HY2 端口
-export REALITY_PORT=            # Reality 端口
+export TUIC_PORT=0
+export HY2_PORT=
+export REALITY_PORT=
 
 # ================== 节点固定名称 ==================
 HY2_NAME="hy2法国卡塔"
