@@ -1,12 +1,14 @@
 #!/bin/bash
 set -e
 
-# ================== 端口设置（你可以改） ==================
-export TUIC_PORT=0
-export HY2_PORT=
-export REALITY_PORT=
+# ================== 端口设置 ==================
+# 注意：HY2 和 TUIC 都是 UDP 协议，不能使用同一个端口，必须错开！
+export TUIC_PORT=200            # TUIC 端口 (改为 20030 避免冲突)
+export HY2_PORT=200             # HY2 端口
+export REALITY_PORT=200         # Reality 端口 (TCP协议，可以和UDP端口复用数字)
 
 # ================== 节点固定名称 ==================
+TUIC_NAME="tuic法国卡塔"
 HY2_NAME="hy2法国卡塔"
 REALITY_NAME="vless法国卡塔"
 
@@ -67,11 +69,11 @@ else
   public_key=$(echo "$output" | awk '/PublicKey:/ {print $2}')
 fi
 
-# ================== 证书生成 ==================
+# ================== 证书生成 (自签名用于 HY2/TUIC) ==================
 openssl ecparam -genkey -name prime256v1 -out "${FILE_PATH}/private.key" 2>/dev/null
 openssl req -new -x509 -days 3650 -key "${FILE_PATH}/private.key" -out "${FILE_PATH}/cert.pem" -subj "/CN=bing.com" 2>/dev/null
 
-# ================== 动态 JSON 拼接（无尾逗号） ==================
+# ================== 动态 JSON 拼接 ==================
 INBOUNDS=""
 
 append() {
@@ -82,7 +84,24 @@ append() {
   fi
 }
 
-# HY2
+# --- 1. TUIC 配置 (新增部分) ---
+if [[ "$TUIC_PORT" != "" && "$TUIC_PORT" != "0" ]]; then
+append "{
+  \"type\": \"tuic\",
+  \"listen\": \"::\",
+  \"listen_port\": $TUIC_PORT,
+  \"users\": [{\"uuid\": \"$UUID\", \"password\": \"$UUID\"}],
+  \"congestion_control\": \"bbr\",
+  \"tls\": {
+    \"enabled\": true,
+    \"alpn\": [\"h3\"],
+    \"certificate_path\": \"${FILE_PATH}/cert.pem\",
+    \"key_path\": \"${FILE_PATH}/private.key\"
+  }
+}"
+fi
+
+# --- 2. HY2 配置 ---
 if [[ "$HY2_PORT" != "" && "$HY2_PORT" != "0" ]]; then
 append "{
   \"type\": \"hysteria2\",
@@ -90,11 +109,16 @@ append "{
   \"listen_port\": $HY2_PORT,
   \"users\": [{\"password\": \"$UUID\"}],
   \"masquerade\": \"https://bing.com\",
-  \"tls\": {\"enabled\": true, \"alpn\": [\"h3\"], \"certificate_path\": \"${FILE_PATH}/cert.pem\", \"key_path\": \"${FILE_PATH}/private.key\"}
+  \"tls\": {
+    \"enabled\": true,
+    \"alpn\": [\"h3\"],
+    \"certificate_path\": \"${FILE_PATH}/cert.pem\",
+    \"key_path\": \"${FILE_PATH}/private.key\"
+  }
 }"
 fi
 
-# Reality VLESS
+# --- 3. Reality VLESS 配置 ---
 if [[ "$REALITY_PORT" != "" && "$REALITY_PORT" != "0" ]]; then
 append "{
   \"type\": \"vless\",
@@ -141,12 +165,17 @@ fi
 # ================== 生成订阅 ==================
 > "${FILE_PATH}/list.txt"
 
-# HY2 节点
+# 1. TUIC 节点 (新增)
+if [[ "$TUIC_PORT" != "" && "$TUIC_PORT" != "0" ]]; then
+echo "tuic://${UUID}:${UUID}@${IP}:${TUIC_PORT}?sni=bing.com&congestion_control=bbr&alpn=h3&allow_insecure=1#${TUIC_NAME}" >> "${FILE_PATH}/list.txt"
+fi
+
+# 2. HY2 节点
 if [[ "$HY2_PORT" != "" && "$HY2_PORT" != "0" ]]; then
 echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&insecure=1#${HY2_NAME}" >> "${FILE_PATH}/list.txt"
 fi
 
-# Reality 节点
+# 3. Reality 节点
 if [[ "$REALITY_PORT" != "" && "$REALITY_PORT" != "0" ]]; then
 echo "vless://${UUID}@${IP}:${REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.nazhumi.com&fp=firefox&pbk=${public_key}&type=tcp#${REALITY_NAME}" >> "${FILE_PATH}/list.txt"
 fi
