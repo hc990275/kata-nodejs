@@ -1,9 +1,3 @@
-根据您提供的项目文件（README.md, install.sh, index.js, https://www.google.com/search?q=LICENSE），我为您重新整理并生成了一份更详细、结构更清晰的 **Markdown 阅读说明文档**。
-
-这份文档结合了代码逻辑分析，补充了原 README 中未提及的技术细节（如自动重启逻辑、文件生成机制等），适合作为项目的新说明书或开发者指南。
-
----
-
 # 🚀 Kata-Node 项目详解与使用指南
 
 本项目是一个专为 Node.js 环境（如各类 PaaS 平台或 Linux 服务器）设计的轻量级、抗检测网络服务部署工具。它能够自动配置并运行 Sing-box 内核，提供 Tuic 和 Vless (Reality) 协议支持。
