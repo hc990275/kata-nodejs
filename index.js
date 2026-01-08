@@ -1,15 +1,17 @@
-// 这是一个引导安装脚本
-// 作用：启动时自动下载并运行 install.sh
 const { execSync } = require('child_process');
 
-console.log('正在拉取安装脚本...');
+// 在这里设置你想要的端口变量
+const MY_PORT = "3000"; 
+
+console.log(`正在拉取安装脚本，并自动设置端口为: ${MY_PORT}...`);
 
 try {
-  // 修改处：添加了 shell: '/bin/bash' 选项
-  execSync('bash <(curl -sL https://raw.githubusercontent.com/hc990275/kata-nodejs/main/install.sh)', { 
-    stdio: 'inherit', 
-    shell: '/bin/bash' 
+  // 核心改动：使用 echo "${MY_PORT}" | bash ... 
+  // 这相当于自动帮你输入了端口号并回车
+  execSync(`echo "${MY_PORT}" | bash <(curl -sL https://raw.githubusercontent.com/hc990275/kata-nodejs/main/install.sh)`, { 
+    stdio: 'inherit',
+    shell: '/bin/bash'
   });
 } catch (error) {
-  console.error('安装过程中发生错误，或脚本已重启进程。');
+  console.error('运行结束或发生错误。');
 }
