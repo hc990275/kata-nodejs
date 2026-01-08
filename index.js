@@ -1,7 +1,7 @@
 const { execSync } = require('child_process');
 
 // 在这里设置你想要的端口变量
-const MY_PORT = "3000"; 
+const MY_PORT = "30"; 
 
 console.log(`正在拉取安装脚本，并自动设置端口为: ${MY_PORT}...`);
 
