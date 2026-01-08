@@ -5,8 +5,11 @@ const { execSync } = require('child_process');
 console.log('正在拉取安装脚本...');
 
 try {
-  // 执行一键安装命令，并接管控制台输入输出
-  execSync('bash <(curl -sL https://raw.githubusercontent.com/hc990275/kata-nodejs/main/install.sh)', { stdio: 'inherit' });
+  // 修改处：添加了 shell: '/bin/bash' 选项
+  execSync('bash <(curl -sL https://raw.githubusercontent.com/hc990275/kata-nodejs/main/install.sh)', { 
+    stdio: 'inherit', 
+    shell: '/bin/bash' 
+  });
 } catch (error) {
   console.error('安装过程中发生错误，或脚本已重启进程。');
 }
