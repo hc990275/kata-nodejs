@@ -1,10 +1,22 @@
 #!/bin/bash
 set -e
 
-# ================== 端口设置 ==================
+# ================== 02端口设置 ==================
 export TUIC_PORT=${TUIC_PORT:-"20025"}
 export HY2_PORT=${HY2_PORT:-""}
 export REALITY_PORT=${REALITY_PORT:-"20025"}
+# ================== 110端口设置 ==================
+export TUIC_PORT=${TUIC_PORT:-"20029"}
+export HY2_PORT=${HY2_PORT:-""}
+export REALITY_PORT=${REALITY_PORT:-"20029"}
+# ================== 123端口设置 ==================
+export TUIC_PORT=${TUIC_PORT:-"20262"}
+export HY2_PORT=${HY2_PORT:-""}
+export REALITY_PORT=${REALITY_PORT:-"20262"}
+# ================== 01端口设置 ==================
+export TUIC_PORT=${TUIC_PORT:-"20259"}
+export HY2_PORT=${HY2_PORT:-""}
+export REALITY_PORT=${REALITY_PORT:-"20259"}
 
 # ================== 自定义节点名称 ==================
 TUIC_NAME="tuic法国卡塔"
