@@ -21,14 +21,20 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { spawn, execSync } = require("child_process");
-const totalMemMB = Math.floor(os.totalmem() / 1024 / 1024);
-const singboxMemLimit = totalMemMB < 100 ? "48MiB" : (totalMemMB <= 150 ? "96MiB" : "128MiB");
-const cloudflaredMemLimit = totalMemMB < 100 ? "64MiB" : (totalMemMB <= 150 ? "160MiB" : "256MiB");
+let containerMem = 0;
+try {
+  const limitStr = fs.existsSync("/sys/fs/cgroup/memory.max") ? fs.readFileSync("/sys/fs/cgroup/memory.max", "utf-8") : fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf-8");
+  containerMem = Math.floor(parseInt(limitStr.trim(), 10) / 1024 / 1024);
+} catch (e) {}
+const totalMemMB = (containerMem > 0 && containerMem < 100000) ? containerMem : Math.floor(os.totalmem() / 1024 / 1024);
+const singboxMemLimit = totalMemMB < 100 ? "20MiB" : (totalMemMB <= 150 ? "25MiB" : "48MiB");
+const cloudflaredMemLimit = totalMemMB < 100 ? "35MiB" : (totalMemMB <= 150 ? "40MiB" : "80MiB");
 
 const GO_BASE_ENV = {
   ...process.env,
   GODEBUG: "madvdontneed=1,cgocheck=0",
-  GOGC: process.env.GOGC || "50"   
+  GOGC: process.env.GOGC || "20",
+  GOMAXPROCS: "1"
 };
 
 const rawUUID = process.env.UUID || (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
