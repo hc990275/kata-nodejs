@@ -4,7 +4,7 @@ const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定�
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
 const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2=稳定+低占用；quic=响应快+占用略高
-const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 连接数量建议：http2=4；quic=1
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 64MB内存 连接数量建议：http2=4；quic=1
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.visa.com.hk";                  // 优选域名/IP
@@ -13,14 +13,6 @@ const NAME = process.env.NAME || "Argo_easyshare";
 
 const FILE_PATH = process.env.FILE_PATH || ".tmp";
 const URL_FILE_PATH = process.env.URL_FILE_PATH || "sub.txt"; 
-
-const iataToCountry = {
-  HKG: "中国香港", TPE: "中国台湾", MFM: "中国澳门",
-  NRT: "日本", HND: "日本", KIX: "日本", ICN: "韩国", SIN: "新加坡",
-  SJC: "美国", LAX: "美国", SEA: "美国", ORD: "美国", JFK: "美国", EWR: "美国", IAD: "美国", ATL: "美国", DFW: "美国", MIA: "美国",
-  LHR: "英国", FRA: "德国", AMS: "荷兰", CDG: "法国", MUC: "德国", ZRH: "瑞士",
-  SYD: "澳大利亚", MEL: "澳大利亚", YVR: "加拿大", YYZ: "加拿大", BKK: "泰国", KUL: "马来西亚", SGN: "越南", DAD: "越南", CGK: "印尼", MNL: "菲律宾", DEL: "印度", BOM: "印度"
-};
 
 const http = require("http");
 const https = require("https");
@@ -93,6 +85,7 @@ if (!fs.existsSync(FILE_PATH)) fs.mkdirSync(FILE_PATH, { recursive: true });
 
 const webPath = path.join(FILE_PATH, "web");
 const botPath = path.join(FILE_PATH, "bot");
+const bootLogPath = path.join(FILE_PATH, "boot.log");
 const configPath = path.join(FILE_PATH, "config.json");
 
 async function main() {
@@ -101,6 +94,10 @@ async function main() {
   try { execSync("rm -rf /tmp/*", { stdio: "ignore" }); } catch (e) {}
   await new Promise((r) => setTimeout(r, 1000)); 
   log("[环境重置] 历史进程与临时文件已清理");
+
+  if (fs.existsSync(bootLogPath)) {
+    try { fs.unlinkSync(bootLogPath); } catch (e) {}
+  }
 
   const config = {
     log: { level: "panic" },
@@ -134,7 +131,7 @@ async function main() {
     const tempTar = path.join(FILE_PATH, "singbox.tar.gz");
     await downloadFile(singboxTarUrl, tempTar);
     extractSingbox(tempTar, webPath);
-    try { fs.unlinkSync(tempTar); } catch (e) {} 
+    try { fs.unlinkSync(tempTar); } catch (e) {}
   }
 
   if (!fs.existsSync(botPath)) {
@@ -153,16 +150,8 @@ async function main() {
   });
 
   await new Promise((r) => setTimeout(r, 1000));
-if (fs.existsSync(webPath)) {
-    try {
-      fs.unlinkSync(webPath);
-      log("[磁盘清理] sing-box (web) 文件已从磁盘彻底删除");
-    } catch (e) {
-      log(`[清理提示] 删除 web 文件失败: ${e.message}`);
-    }
-  }
+
   const authTrim = ARGO_AUTH.trim();
-  const isFixedTunnel = authTrim.length > 30;
 
   let argoArgs = [
     "tunnel",
@@ -173,16 +162,16 @@ if (fs.existsSync(webPath)) {
 
   if (authTrim.length > 30) {
     log(`检测到 Token，启动固定隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
-    argoArgs.push("run", "--token", authTrim, "--logfile", "/dev/null");
+    argoArgs.push("run", "--token", authTrim);
   } else {
     log(`未检测到 Token，启动临时隧道...`);
-    argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`);
+    argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`, "--logfile", bootLogPath, "--loglevel", "info");
   }
 
   log("正在启动 Cloudflared 隧道...");
   let botProc = spawn(botPath, argoArgs, {
     env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "20MiB" }),
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: "ignore",
     detached: true 
   });
     
@@ -190,53 +179,23 @@ if (fs.existsSync(webPath)) {
   botProc.unref();
 
   let domain = ARGO_DOMAIN;
-  let cdnRegion = ""; 
-
-  if (botProc && botProc.stderr) {
-    botProc.stderr.on("data", (chunk) => {
-      const msg = chunk.toString();
-      if (!cdnRegion) {
-        const locMatch = msg.match(/location=([A-Z]{3})/);
-        if (locMatch && locMatch[1]) {
-          const code = locMatch[1];
-          cdnRegion = iataToCountry[code] ? `${iataToCountry[code]} (${code})` : code;
-        }
+  if (!domain && authTrim.length <= 30) {
+    log("正在获取 Argo 临时域名...");
+    for (let i = 0; i < 25; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      if (fs.existsSync(bootLogPath)) {
+        try {
+          const logText = fs.readFileSync(bootLogPath, "utf-8");
+          if (logText && logText.length > 0) {
+            const match = logText.match(/https?:\/\/([^ ]*trycloudflare\.com)\/?/);
+            if (match) {
+              domain = match[1];
+              break;
+            }
+          }
+        } catch (e) {}
       }
-    });
-  }
-
-  if (!domain && !isFixedTunnel) {
-    log("正在通过内存管道获取 Argo 临时域名...");
-    domain = await new Promise((resolve) => {
-      let resolved = false;
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          resolve("");
-        }
-      }, 30000);
-
-      const onDomainData = (chunk) => {
-        if (resolved) return;
-        const msg = chunk.toString();
-        const match = msg.match(/https?:\/\/([^ ]*trycloudflare\.com)\/?/);
-        if (match) {
-          resolved = true;
-          clearTimeout(timeout);
-          botProc.stderr.removeListener("data", onDomainData);
-          resolve(match[1]);
-        }
-      };
-
-      botProc.stderr.on("data", onDomainData);
-    });
-  }
-
-  if (isFixedTunnel && !cdnRegion) {
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-    if (global.gc) {
-    try { global.gc(); } catch (e) {}
+    }
   }
 
   if (domain) {
@@ -249,19 +208,25 @@ if (fs.existsSync(webPath)) {
     } catch (e) {
       log(`[错误！] 保存节点链接失败: ${e.message}`);
     }
-
-    const protoUpper = ARGO_PROTOCOL.toUpperCase();
-    if (cdnRegion) {
-      log(`[Cloudflare CDN] 节点连通 ➔ 地区: ${cdnRegion} | 协议: ${protoUpper}`);
-    } else {
-      log(`[Cloudflare CDN] 节点连通 ➔ 协议: ${protoUpper}`);
-    }
-  } else if (isFixedTunnel) {
+  } else if (authTrim.length > 30) {
     log(`[提示] 已启动固定隧道，请确保已在 Cloudflare Tunnels配置了服务URL (指向 http://127.0.0.1:${ARGO_PORT})。`);
   } else {
     log("[错误！] 获取 Argo 临时域名失败，请检查 boot.log 日志内容！");
   }
 
+  if (fs.existsSync(bootLogPath)) {
+    try { fs.unlinkSync(bootLogPath); } catch (e) {}
+  }
+
+  if (fs.existsSync(webPath)) {
+    try {
+      fs.unlinkSync(webPath);
+      log("[磁盘清理] sing-box 已在内存运行，已从磁盘删除以释放空间");
+    } catch (e) {
+      log(`[清理失败] 删除 web 文件出错: ${e.message}`);
+    }
+  }
+  log("[引导完成] 守护进程持续运行中...");
   setInterval(() => {}, 2147483647);
 }
 
