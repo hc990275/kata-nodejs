@@ -22,7 +22,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawn, execSync } = require("child_process");
 
-// 常见 IATA 机场代码 -> 国家/地区代码 (ISO 3166-1 alpha-2)
+// 常见 IATA 代码 -> 国家/地区代码 (ISO 3166-1 alpha-2)
 const iataToCountry = {
   // 亚洲 / 亚太
   HKG: "HK", TPE: "TW", NRT: "JP", HND: "JP", KIX: "JP", ICN: "KR", SIN: "SG", BKK: "TH",
