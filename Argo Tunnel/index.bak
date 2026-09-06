@@ -4,6 +4,7 @@ const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定�
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
 const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2=稳定+低占用；quic=响应快+占用略高
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || 4;          // 手动设置隧道连接数量（128MB内存建议1~2）
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.wto.org";                      // 优选域名/IP
@@ -21,7 +22,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawn, execSync } = require("child_process");
 
-// 常见 IATA 代码 -> 国家/地区代码 (ISO 3166-1 alpha-2)
+// 常见 IATA 机场代码 -> 国家/地区代码 (ISO 3166-1 alpha-2)
 const iataToCountry = {
   // 亚洲 / 亚太
   HKG: "HK", TPE: "TW", NRT: "JP", HND: "JP", KIX: "JP", ICN: "KR", SIN: "SG", BKK: "TH",
@@ -53,14 +54,15 @@ try {
   containerMem = Math.floor(parseInt(limitStr.trim(), 10) / 1024 / 1024);
 } catch (e) {}
 const totalMemMB = (containerMem > 0 && containerMem < 100000) ? containerMem : Math.floor(os.totalmem() / 1024 / 1024);
-const singboxMemLimit = totalMemMB < 150 ? "30MiB" : (totalMemMB <= 256 ? "60MiB" : "120MiB");
-const cloudflaredMemLimit = totalMemMB < 150 ? "45MiB" : (totalMemMB <= 256 ? "90MiB" : "180MiB");
-const dynamicGOGC = process.env.GOGC || (totalMemMB < 150 ? "30" : "80");
+const isLowMem = totalMemMB < 180;
+const singboxMemLimit = isLowMem ? "20MiB" : (totalMemMB <= 256 ? "50MiB" : "120MiB");
+const cloudflaredMemLimit = isLowMem ? "35MiB" : (totalMemMB <= 256 ? "80MiB" : "180MiB");
+const dynamicGOGC = process.env.GOGC || (isLowMem ? "15" : "80"); 
 const GO_BASE_ENV = {
   ...process.env,
   GODEBUG: "madvdontneed=1,cgocheck=0",
   GOGC: dynamicGOGC,
-  GOMAXPROCS: "0"
+  GOMAXPROCS: "1"
 };
 
 const rawUUID = process.env.UUID || (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -111,6 +113,19 @@ function extractSingbox(tarPath, targetWebPath) {
     }
   } catch (e) {}
   throw new Error("提取 sing-box 失败");
+}
+
+function saveAndOutputNodeLink(domain) {
+  const encodedPath = encodeURIComponent(WS_PATH);
+  const plainNodeLink = `vless://${UUID}@${CFIP}:${CFPORT}?encryption=none&security=tls&sni=${domain}&fp=chrome&type=ws&host=${domain}&path=${encodedPath}#${NAME}`;
+  log(`\n================== Argo Vless 节点链接 ==================\n${plainNodeLink}\n===================================================\n`);
+
+  try {
+    fs.writeFileSync(URL_FILE_PATH, plainNodeLink, "utf-8");
+    log(`[成功！] 节点链接已保存至 ${URL_FILE_PATH}`);
+  } catch (e) {
+    log(`[错误！] 保存节点链接失败: ${e.message}`);
+  }
 }
 
 if (!fs.existsSync(FILE_PATH)) fs.mkdirSync(FILE_PATH, { recursive: true });
@@ -193,25 +208,22 @@ async function main() {
   await new Promise((r) => setTimeout(r, 1000));
 
   const authTrim = ARGO_AUTH.trim();
+  const isFixedTunnel = authTrim.length > 30;
 
   let argoArgs = [
     "tunnel",
     "--no-autoupdate",
     "--protocol", ARGO_PROTOCOL.toLowerCase(),
+    "--ha-connections", String(ARGO_CONNECTIONS),
     "--loglevel", "info"
   ];
 
-  if (authTrim.length > 30) {
-    log(`检测到 Token，启动固定隧道 [协议:${ARGO_PROTOCOL}]...`);
-    argoArgs.push(
-      "run",
-      "--token", authTrim
-    );
+  if (isFixedTunnel) {
+    log(`检测到 Token，启动固定隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
+    argoArgs.push("run", "--token", authTrim);
   } else {
-    log(`未检测到 Token，启动临时隧道 [协议:${ARGO_PROTOCOL}]...`);
-    argoArgs.push(
-      "--url", `http://127.0.0.1:${ARGO_PORT}`
-    );
+    log(`未检测到 Token，启动临时隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
+    argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`);
   }
 
   log(`正在启动 Cloudflared 隧道...`);
@@ -220,11 +232,32 @@ async function main() {
     stdio: ["ignore", "pipe", "pipe"]
   });
 
+  let hasOutputLink = false;
 
+  // 固定隧道模式下，直接输出并保存链接
+  if (isFixedTunnel) {
+    const domain = ARGO_DOMAIN.trim();
+    if (domain) {
+      saveAndOutputNodeLink(domain);
+      hasOutputLink = true;
+    }
+  }
+
+  // 监听标准错误/标准输出流，美化地区日志并捕获临时隧道域名
   botProc.stderr.on("data", (data) => {
     const msg = data.toString();
 
+    // 1. 临时隧道域名提取
+    if (!isFixedTunnel && !hasOutputLink) {
+      const domainMatch = msg.match(/https:\/\/([a-zA-Z0-9-]+\.trycloudflare\.com)/);
+      if (domainMatch && domainMatch[1]) {
+        const tempDomain = domainMatch[1];
+        saveAndOutputNodeLink(tempDomain);
+        hasOutputLink = true;
+      }
+    }
 
+    // 2. 边缘节点接入美化输出
     const regMatch = msg.match(/Registered tunnel connection.*location=([a-z0-9]+).*protocol=([a-z0-9]+)/i);
     if (regMatch) {
       const rawLocation = regMatch[1];
@@ -234,6 +267,7 @@ async function main() {
       return;
     }
 
+    // 3. 过滤普通日志，仅保留 ERR 或 CRIT 致命报错
     if (msg.includes("ERR") || msg.includes("CRIT")) {
       log(`[Cloudflared 异常]: ${msg.trim()}`);
     }
@@ -245,29 +279,6 @@ async function main() {
   botProc.on("exit", (code) => {
     log(`[警告] Cloudflared 进程退出，退出码: ${code}`);
   });
-
-  let domain = "";
-  if (authTrim.length > 30) {
-    domain = ARGO_DOMAIN.trim();
-  } else {
-    log("正在等待 Argo 隧道建链...");
-    await new Promise((r) => setTimeout(r, 3000));
-  } 
-
-  if (domain) {
-    const encodedPath = encodeURIComponent(WS_PATH);
-    const plainNodeLink = `vless://${UUID}@${CFIP}:${CFPORT}?encryption=none&security=tls&sni=${domain}&fp=chrome&type=ws&host=${domain}&path=${encodedPath}#${NAME}`;
-    log(`\n================== Argo Vless 节点链接 ==================\n${plainNodeLink}\n===================================================\n`);
-
-    try {
-      fs.writeFileSync(URL_FILE_PATH, plainNodeLink, "utf-8");
-      log(`[成功！] 节点链接已保存至 ${URL_FILE_PATH}`);
-    } catch (e) {
-      log(`[错误！] 保存节点链接失败: ${e.message}`);
-    }
-  } else if (authTrim.length > 30) {
-    log(`[提示] 已启动固定隧道，请确保已在 Cloudflare Tunnels 配置了服务 URL (指向 http://127.0.0.1:${ARGO_PORT})。`);
-  }
 
   const cleanup = () => {
     try { webProc.kill("SIGKILL"); } catch (e) {}
