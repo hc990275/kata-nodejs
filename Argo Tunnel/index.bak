@@ -22,14 +22,10 @@ const path = require("path");
 const crypto = require("crypto");
 const { spawn, execSync } = require("child_process");
 
-// 常见 IATA 代码 -> 国家/地区代码 (ISO 3166-1 alpha-2)
 const iataToCountry = {
-  // 亚洲 / 亚太
   HKG: "HK", TPE: "TW", NRT: "JP", HND: "JP", KIX: "JP", ICN: "KR", SIN: "SG", BKK: "TH",
   KUL: "MY", MNL: "PH", CGK: "ID", HAN: "VN", SGN: "VN", DEL: "IN", BOM: "IN", SYD: "AU", MEL: "AU",
-  // 欧洲
   CDG: "FR", LHR: "GB", FRA: "DE", AMS: "NL", ZRH: "CH", HEL: "FI", MAD: "ES", FCO: "IT",
-  // 北美 / 南美
   LAX: "US", SJC: "US", JFK: "US", SEA: "US", ORD: "US", SFO: "US", DFW: "US", IAD: "US", YVR: "CA", YYZ: "CA"
 };
 
@@ -222,7 +218,7 @@ async function main() {
     log(`检测到 Token，启动固定隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
     argoArgs.push("run", "--token", authTrim);
   } else {
-    log(`未检测到 Token，启动临时隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
+    log(`未检测到 Token，启动临时隧道...`);
     argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`);
   }
 
@@ -234,7 +230,6 @@ async function main() {
 
   let hasOutputLink = false;
 
-  // 固定隧道模式下，直接输出并保存链接
   if (isFixedTunnel) {
     const domain = ARGO_DOMAIN.trim();
     if (domain) {
@@ -243,11 +238,9 @@ async function main() {
     }
   }
 
-  // 监听标准错误/标准输出流，美化地区日志并捕获临时隧道域名
   botProc.stderr.on("data", (data) => {
     const msg = data.toString();
 
-    // 1. 临时隧道域名提取
     if (!isFixedTunnel && !hasOutputLink) {
       const domainMatch = msg.match(/https:\/\/([a-zA-Z0-9-]+\.trycloudflare\.com)/);
       if (domainMatch && domainMatch[1]) {
@@ -257,7 +250,6 @@ async function main() {
       }
     }
 
-    // 2. 边缘节点接入美化输出
     const regMatch = msg.match(/Registered tunnel connection.*location=([a-z0-9]+).*protocol=([a-z0-9]+)/i);
     if (regMatch) {
       const rawLocation = regMatch[1];
@@ -267,7 +259,6 @@ async function main() {
       return;
     }
 
-    // 3. 过滤普通日志，仅保留 ERR 或 CRIT 致命报错
     if (msg.includes("ERR") || msg.includes("CRIT")) {
       log(`[Cloudflared 异常]: ${msg.trim()}`);
     }
