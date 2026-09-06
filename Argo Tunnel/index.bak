@@ -240,7 +240,7 @@ const plainNodeLink = `vless://${UUID}@${CFIP}:${CFPORT}?encryption=none&securit
   } else {
     log("[错误！] 获取 Argo 临时域名失败，请检查 boot.log 日志内容！");
   }
-
+}
   if (fs.existsSync(bootLogPath)) {
     try { fs.unlinkSync(bootLogPath); } catch (e) {}
   }
