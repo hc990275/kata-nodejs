@@ -85,7 +85,6 @@ if (!fs.existsSync(FILE_PATH)) fs.mkdirSync(FILE_PATH, { recursive: true });
 
 const webPath = path.join(FILE_PATH, "web");
 const botPath = path.join(FILE_PATH, "bot");
-const bootLogPath = path.join(FILE_PATH, "boot.log");
 const configPath = path.join(FILE_PATH, "config.json");
 
 async function main() {
@@ -94,10 +93,6 @@ async function main() {
   try { execSync("rm -rf /tmp/*", { stdio: "ignore" }); } catch (e) {}
   await new Promise((r) => setTimeout(r, 1000)); 
   log("[环境重置] 历史进程与临时文件已清理");
-
-  if (fs.existsSync(bootLogPath)) {
-    try { fs.unlinkSync(bootLogPath); } catch (e) {}
-  }
 
   const config = {
     log: { level: "panic" },
@@ -131,7 +126,7 @@ async function main() {
     const tempTar = path.join(FILE_PATH, "singbox.tar.gz");
     await downloadFile(singboxTarUrl, tempTar);
     extractSingbox(tempTar, webPath);
-    try { fs.unlinkSync(tempTar); } catch (e) {}
+    try { fs.unlinkSync(tempTar); } catch (e) {} 
   }
 
   if (!fs.existsSync(botPath)) {
@@ -150,8 +145,16 @@ async function main() {
   });
 
   await new Promise((r) => setTimeout(r, 1000));
-
+if (fs.existsSync(webPath)) {
+    try {
+      fs.unlinkSync(webPath);
+      log("[磁盘清理] sing-box (web) 文件已从磁盘彻底删除");
+    } catch (e) {
+      log(`[清理提示] 删除 web 文件失败: ${e.message}`);
+    }
+  }
   const authTrim = ARGO_AUTH.trim();
+  const isFixedTunnel = authTrim.length > 30;
 
   let argoArgs = [
     "tunnel",
@@ -162,16 +165,16 @@ async function main() {
 
   if (authTrim.length > 30) {
     log(`检测到 Token，启动固定隧道 [协议:${ARGO_PROTOCOL} | 连接数:${ARGO_CONNECTIONS}]...`);
-    argoArgs.push("run", "--token", authTrim);
+    argoArgs.push("run", "--token", authTrim, "--logfile", "/dev/null");
   } else {
     log(`未检测到 Token，启动临时隧道...`);
-    argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`, "--logfile", bootLogPath, "--loglevel", "info");
+    argoArgs.push("--url", `http://127.0.0.1:${ARGO_PORT}`);
   }
 
   log("正在启动 Cloudflared 隧道...");
   let botProc = spawn(botPath, argoArgs, {
     env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "20MiB" }),
-    stdio: "ignore",
+    stdio: ["ignore", "ignore", "pipe"],
     detached: true 
   });
     
@@ -179,23 +182,34 @@ async function main() {
   botProc.unref();
 
   let domain = ARGO_DOMAIN;
-  if (!domain && authTrim.length <= 30) {
-    log("正在获取 Argo 临时域名...");
-    for (let i = 0; i < 25; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      if (fs.existsSync(bootLogPath)) {
-        try {
-          const logText = fs.readFileSync(bootLogPath, "utf-8");
-          if (logText && logText.length > 0) {
-            const match = logText.match(/https?:\/\/([^ ]*trycloudflare\.com)\/?/);
-            if (match) {
-              domain = match[1];
-              break;
-            }
-          }
-        } catch (e) {}
+
+  if (!domain && !isFixedTunnel) {
+    log("正在通过内存管道获取 Argo 临时域名...");
+    domain = await new Promise((resolve) => {
+      let resolved = false;
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve("");
+        }
+      }, 30000);
+
+      botProc.stderr.on("data", (chunk) => {
+        if (resolved) return;
+        const msg = chunk.toString();
+        const match = msg.match(/https?:\/\/([^ ]*trycloudflare\.com)\/?/);
+        if (match) {
+          resolved = true;
+          clearTimeout(timeout);
+          botProc.stderr.removeAllListeners("data"); 
+          botProc.stderr.pause(); 
+          resolve(match[1]);
+        }
+      });
+    });
       }
-    }
+    if (global.gc) {
+    try { global.gc(); } catch (e) {}
   }
 
   if (domain) {
@@ -208,25 +222,12 @@ async function main() {
     } catch (e) {
       log(`[错误！] 保存节点链接失败: ${e.message}`);
     }
-  } else if (authTrim.length > 30) {
+  } else if (isFixedTunnel) {
     log(`[提示] 已启动固定隧道，请确保已在 Cloudflare Tunnels配置了服务URL (指向 http://127.0.0.1:${ARGO_PORT})。`);
   } else {
     log("[错误！] 获取 Argo 临时域名失败，请检查 boot.log 日志内容！");
   }
 
-  if (fs.existsSync(bootLogPath)) {
-    try { fs.unlinkSync(bootLogPath); } catch (e) {}
-  }
-
-  if (fs.existsSync(webPath)) {
-    try {
-      fs.unlinkSync(webPath);
-      log("[磁盘清理] sing-box 已在内存运行，已从磁盘删除以释放空间");
-    } catch (e) {
-      log(`[清理失败] 删除 web 文件出错: ${e.message}`);
-    }
-  }
-  log("[引导完成] 守护进程持续运行中...");
   setInterval(() => {}, 2147483647);
 }
 
