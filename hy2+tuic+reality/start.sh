@@ -81,20 +81,21 @@ else
   echo -e "\e[1;32m[核心] 已存在 Sing-box 核心，跳过下载\e[0m"
 fi
 
-# ================== 固定 Reality 密钥 ==================
-KEY_FILE="${FILE_PATH}/key.txt"
-if [ -f "$KEY_FILE" ]; then
-  echo -e "\e[1;33m[密钥] 检测到已有密钥，复用...\e[0m"
-  private_key=$(grep "PrivateKey:" "$KEY_FILE" | awk '{print $2}')
-  public_key=$(grep "PublicKey:" "$KEY_FILE" | awk '{print $2}')
-else
-  echo -e "\e[1;33m[密钥] 首次生成 Reality 密钥对...\e[0m"
-  output=$("$SINGBOX_BIN" generate reality-keypair)
-  echo "$output" > "$KEY_FILE"
-  private_key=$(echo "$output" | awk '/PrivateKey:/ {print $2}')
-  public_key=$(echo "$output" | awk '/PublicKey:/ {print $2}')
-  chmod 600 "$KEY_FILE"
-  echo -e "\e[1;32m[密钥] 密钥已保存，重启后保持不变\e[0m"
+if [ "$REALITY_PORT" != "" ] && [ "$REALITY_PORT" != "0" ]; then
+  KEY_FILE="${FILE_PATH}/key.txt"
+  if [ -f "$KEY_FILE" ]; then
+    echo -e "\e[1;33m[密钥] 检测到已有密钥，复用...\e[0m"
+    private_key=$(grep "PrivateKey:" "$KEY_FILE" | awk '{print $2}')
+    public_key=$(grep "PublicKey:" "$KEY_FILE" | awk '{print $2}')
+  else
+    echo -e "\e[1;33m[密钥] 首次生成 Reality 密钥对...\e[0m"
+    output=$("$SINGBOX_BIN" generate reality-keypair)
+    echo "$output" > "$KEY_FILE"
+    private_key=$(echo "$output" | awk '/PrivateKey:/ {print $2}')
+    public_key=$(echo "$output" | awk '/PublicKey:/ {print $2}')
+    chmod 600 "$KEY_FILE"
+    echo -e "\e[1;32m[密钥] 密钥已保存，重启后保持不变\e[0m"
+  fi
 fi
 
 # ================== 生成证书（自签或固定）==================
@@ -180,9 +181,9 @@ ISP=$(curl -s --max-time 2 https://speed.cloudflare.com/meta | awk -F'"' '{print
 
 # ================== 生成订阅 ==================
 > "${FILE_PATH}/list.txt"
-[ "$TUIC_PORT" != "" ] && [ "$TUIC_PORT" != "0" ] && echo "tuic://${UUID}:admin@${IP}:${TUIC_PORT}?sni=www.bing.com&alpn=h3&congestion_control=bbr&allowInsecure=1#TUIC-${ISP}" >> "${FILE_PATH}/list.txt"
-[ "$HY2_PORT" != "" ] && [ "$HY2_PORT" != "0" ] && echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&insecure=1#Hysteria2-${ISP}" >> "${FILE_PATH}/list.txt"
-[ "$REALITY_PORT" != "" ] && [ "$REALITY_PORT" != "0" ] && echo "vless://${UUID}@${IP}:${REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.nazhumi.com&fp=firefox&pbk=${public_key}&type=tcp#Reality-${ISP}" >> "${FILE_PATH}/list.txt"
+[ "$TUIC_PORT" != "" ] && [ "$TUIC_PORT" != "0" ] && echo "tuic://${UUID}:admin@${IP}:${TUIC_PORT}?sni=www.bing.com&alpn=h3&congestion_control=bbr&allowInsecure=1#tuic_easyshare" >> "${FILE_PATH}/list.txt"
+[ "$HY2_PORT" != "" ] && [ "$HY2_PORT" != "0" ] && echo "hysteria2://${UUID}@${IP}:${HY2_PORT}/?sni=www.bing.com&insecure=1#hy2_easyshare" >> "${FILE_PATH}/list.txt"
+[ "$REALITY_PORT" != "" ] && [ "$REALITY_PORT" != "0" ] && echo "vless://${UUID}@${IP}:${REALITY_PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.nazhumi.com&fp=firefox&pbk=${public_key}&type=tcp#reality_easyshare" >> "${FILE_PATH}/list.txt"
 
 base64 "${FILE_PATH}/list.txt" | tr -d '\n' > "${FILE_PATH}/sub.txt"
 cat "${FILE_PATH}/list.txt"
