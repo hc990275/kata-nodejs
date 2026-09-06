@@ -14,6 +14,14 @@ const NAME = process.env.NAME || "Argo_easyshare";
 const FILE_PATH = process.env.FILE_PATH || ".tmp";
 const URL_FILE_PATH = process.env.URL_FILE_PATH || "sub.txt"; 
 
+const iataToCountry = {
+  HKG: "中国香港", TPE: "中国台湾", MFM: "中国澳门",
+  NRT: "日本", HND: "日本", KIX: "日本", ICN: "韩国", SIN: "新加坡",
+  SJC: "美国", LAX: "美国", SEA: "美国", ORD: "美国", JFK: "美国", EWR: "美国", IAD: "美国", ATL: "美国", DFW: "美国", MIA: "美国",
+  LHR: "英国", FRA: "德国", AMS: "荷兰", CDG: "法国", MUC: "德国", ZRH: "瑞士",
+  SYD: "澳大利亚", MEL: "澳大利亚", YVR: "加拿大", YYZ: "加拿大", BKK: "泰国", KUL: "马来西亚", SGN: "越南", DAD: "越南", CGK: "印尼", MNL: "菲律宾", DEL: "印度", BOM: "印度"
+};
+
 const http = require("http");
 const https = require("https");
 const os = require("os");
@@ -182,7 +190,21 @@ if (fs.existsSync(webPath)) {
   botProc.unref();
 
   let domain = ARGO_DOMAIN;
+let cdnRegion = ""; 
 
+  if (botProc && botProc.stderr) {
+    botProc.stderr.on("data", (chunk) => {
+      const msg = chunk.toString();
+
+      if (!cdnRegion) {
+        const locMatch = msg.match(/location=([A-Z]{3})/);
+        if (locMatch && locMatch[1]) {
+          const code = locMatch[1];
+          cdnRegion = iataToCountry[code] ? `${iataToCountry[code]} (${code})` : code;
+        }
+      }
+    });
+  }
   if (!domain && !isFixedTunnel) {
     log("正在通过内存管道获取 Argo 临时域名...");
     domain = await new Promise((resolve) => {
