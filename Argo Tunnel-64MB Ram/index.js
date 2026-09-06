@@ -190,12 +190,11 @@ if (fs.existsSync(webPath)) {
   botProc.unref();
 
   let domain = ARGO_DOMAIN;
-let cdnRegion = ""; 
+  let cdnRegion = ""; 
 
   if (botProc && botProc.stderr) {
     botProc.stderr.on("data", (chunk) => {
       const msg = chunk.toString();
-
       if (!cdnRegion) {
         const locMatch = msg.match(/location=([A-Z]{3})/);
         if (locMatch && locMatch[1]) {
@@ -205,6 +204,7 @@ let cdnRegion = "";
       }
     });
   }
+
   if (!domain && !isFixedTunnel) {
     log("正在通过内存管道获取 Argo 临时域名...");
     domain = await new Promise((resolve) => {
@@ -216,20 +216,25 @@ let cdnRegion = "";
         }
       }, 30000);
 
-      botProc.stderr.on("data", (chunk) => {
+      const onDomainData = (chunk) => {
         if (resolved) return;
         const msg = chunk.toString();
         const match = msg.match(/https?:\/\/([^ ]*trycloudflare\.com)\/?/);
         if (match) {
           resolved = true;
           clearTimeout(timeout);
-          botProc.stderr.removeAllListeners("data"); 
-          botProc.stderr.pause(); 
+          botProc.stderr.removeListener("data", onDomainData);
           resolve(match[1]);
         }
-      });
+      };
+
+      botProc.stderr.on("data", onDomainData);
     });
-      }
+  }
+
+  if (isFixedTunnel && !cdnRegion) {
+    await new Promise((r) => setTimeout(r, 3000));
+  }
     if (global.gc) {
     try { global.gc(); } catch (e) {}
   }
@@ -243,6 +248,13 @@ let cdnRegion = "";
       log(`[成功！] 节点链接已保存至 ${URL_FILE_PATH}`);
     } catch (e) {
       log(`[错误！] 保存节点链接失败: ${e.message}`);
+    }
+
+    const protoUpper = ARGO_PROTOCOL.toUpperCase();
+    if (cdnRegion) {
+      log(`[Cloudflare CDN] 节点连通 ➔ 地区: ${cdnRegion} | 协议: ${protoUpper}`);
+    } else {
+      log(`[Cloudflare CDN] 节点连通 ➔ 协议: ${protoUpper}`);
     }
   } else if (isFixedTunnel) {
     log(`[提示] 已启动固定隧道，请确保已在 Cloudflare Tunnels配置了服务URL (指向 http://127.0.0.1:${ARGO_PORT})。`);
