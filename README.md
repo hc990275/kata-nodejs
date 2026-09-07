@@ -52,10 +52,12 @@
 * 3.Bot hosting：256+512，Earn Coins每日赚取10金币，自动扣费续期。
                 （❗️不开放7844端口，不支持Argo）
   
-* 4.Freecloudpanel：64+64，每30天续期。
+* 4.Pella.app：100MB内存，免费机型24小时续期，不开放TCP/UDP公网端口，只支持Argo临时/固定隧道。   
+  
+* 5.Freecloudpanel：64+64，每30天续期。
                 （⚠️不定期开放注册）
   
-* 5.zenix.sg：服务器创建排队中......
+* 6.zenix.sg：服务器创建排队中......
 ---
 
 ⚠️ **免责声明（Disclaimer）**
