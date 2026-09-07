@@ -28,7 +28,7 @@ const GO_BASE_ENV = {
   ...process.env,
   GODEBUG: "madvdontneed=1,cgocheck=0",
   GOMAXPROCS: "1",
-  GOGC: "15"
+  GOGC: "10"
 };
 
 const rawUUID = process.env.UUID || (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -144,7 +144,7 @@ async function main() {
 
   log("正在启动 sing-box 服务...");
   let webProc = spawn(webPath, ["run", "-c", configPath], {
-    env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "10MiB" }),
+    env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "8MiB" }),
     stdio: "ignore",
     detached: true 
   });
@@ -170,7 +170,7 @@ async function main() {
 
   log("正在启动 Cloudflared 隧道...");
   let botProc = spawn(botPath, argoArgs, {
-    env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "20MiB" }),
+    env: Object.assign({}, GO_BASE_ENV, { GOMEMLIMIT: "14MiB" }),
     stdio: "ignore",
     detached: true 
   });
