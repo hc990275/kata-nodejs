@@ -221,7 +221,7 @@ async function main() {
   if (fs.existsSync(webPath)) {
     try {
       fs.unlinkSync(webPath);
-      log("[磁盘清理] sing-box 已在内存运行，已从磁盘删除以释放空间");
+      log("[磁盘清理] sing-box 运行中，磁盘空间已释放");
     } catch (e) {
       log(`[清理失败] 删除 web 文件出错: ${e.message}`);
     }
