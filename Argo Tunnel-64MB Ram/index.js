@@ -31,10 +31,30 @@ const GO_BASE_ENV = {
   GOGC: "10"
 };
 
-const rawUUID = process.env.UUID || (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-  const r = (Math.random() * 16) | 0;
-  return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-}));
+const isFixedTunnelEnv = ARGO_AUTH.trim().length > 30 || ARGO_DOMAIN.trim().length > 0;
+const uuidFilePath = path.join(FILE_PATH, "uuid.txt");
+
+let rawUUID = process.env.UUID;
+
+if (isFixedTunnelEnv && !rawUUID && fs.existsSync(uuidFilePath)) {
+  try {
+    rawUUID = fs.readFileSync(uuidFilePath, "utf-8").trim();
+  } catch (e) {}
+}
+
+if (!rawUUID) {
+  rawUUID = (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  }));
+
+  if (isFixedTunnelEnv) {
+    try {
+      if (!fs.existsSync(FILE_PATH)) fs.mkdirSync(FILE_PATH, { recursive: true });
+      fs.writeFileSync(uuidFilePath, rawUUID, "utf-8");
+    } catch (e) {}
+  }
+}
 
 const UUID = rawUUID.toLowerCase();
 const WS_PATH = `/${UUID}-vless`;
