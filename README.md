@@ -8,10 +8,10 @@
 
 ## 💡 特性与适用场景
 
-### 1. 🌐 TCP/UDP 双模Argo Tunnel 方案 (内网穿透与穿墙)
+### 1. 🌐 http2/quic 双模Argo Tunnel 方案 (内网穿透与穿墙)
 
 
-* **http2 / quic 双模隧道**：手动切换http2/quic、连接数可调。
+* **TCP/UDP双模**：隧道类型手动切换http2/quic、连接数可调。
 * **精简 Sing-box 架构**：极低资源占用。
 * **高稳定 Guardian 启动器**：内置 `start.sh` 内存与进程守护机制，精准控制垃圾回收（GC），在 64MB 低内存环境稳定运行。
 * **📌 适用场景**：
