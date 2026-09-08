@@ -4,7 +4,7 @@ const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定�
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
 const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2或quic（http2=稳定+低占用；quic=响应快+占用略高）
-const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 隧道连接数量 建议http2=4，quic=2或1（多条UDP可能会触发机房QoS）
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 隧道连接数量 建议http2=4，quic=1（多条UDP可能会触发机房QoS）
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.wto.org";                      // 优选域名/IP
@@ -66,25 +66,25 @@ if (totalMemMB <= 160) {
   dynamicProcs = "1";
 
 } else if (totalMemMB < 320) {
-  singboxMemLimit = "80MiB";
-  cloudflaredMemLimit = "150MiB";
+  singboxMemLimit = "90MiB";
+  cloudflaredMemLimit = "130MiB";
   dynamicGOGC = "120";    
-  dynamicProcs = "2";     
+  dynamicProcs = "1";     
 
 } else if (totalMemMB < 448) {
-  singboxMemLimit = "120MiB";
+  singboxMemLimit = "130MiB";
   cloudflaredMemLimit = "200MiB";
-  dynamicGOGC = "130";
+  dynamicGOGC = "140";
   dynamicProcs = "2";
 
 } else if (totalMemMB < 576) {
-  singboxMemLimit = "160MiB";
+  singboxMemLimit = "180MiB";
   cloudflaredMemLimit = "280MiB";
-  dynamicGOGC = "150";
+  dynamicGOGC = "160";
   dynamicProcs = "2";
 
 } else {
-  singboxMemLimit = "256MiB";
+  singboxMemLimit = "384MiB";
   cloudflaredMemLimit = "512MiB";
   dynamicGOGC = "200";    
   dynamicProcs = process.env.GOMAXPROCS || "4"; 
@@ -92,7 +92,7 @@ if (totalMemMB <= 160) {
 
 const GO_BASE_ENV = {
   ...process.env,
-  GODEBUG: "madvdontneed=1,cgocheck=0",
+  GODEBUG: "madvdontneed=1,cgocheck=0,netdns=go",
   GOMAXPROCS: process.env.GOMAXPROCS || dynamicProcs,
   GOGC: process.env.GOGC || dynamicGOGC
 };
