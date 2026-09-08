@@ -3,8 +3,8 @@
 const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定隧道域名（留空=临时隧道）
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
-const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2 或 quic（http2=稳定+低占用；quic=响应快+占用略高）
-const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 建议连接数量：http2=4 ， quic=2或1（以防UDP被机房QoS）
+const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2或quic（http2=稳定+低占用；quic=响应快+占用略高）
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 隧道连接数量 建议http2=4，quic=2或1（多条UDP可能会触发机房QoS）
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.wto.org";                      // 优选域名/IP
