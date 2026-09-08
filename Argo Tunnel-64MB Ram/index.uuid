@@ -112,12 +112,9 @@ async function main() {
   try { execSync("pkill -9 -f sing-box", { stdio: "ignore" }); } catch (e) {}
   try { execSync("pkill -9 -f cloudflared", { stdio: "ignore" }); } catch (e) {}
   try { execSync("rm -rf /tmp/*", { stdio: "ignore" }); } catch (e) {}
+  if (fs.existsSync(bootLogPath)) { try { fs.unlinkSync(bootLogPath); } catch (e) {} }
   await new Promise((r) => setTimeout(r, 1000)); 
   log("[环境重置] 历史进程与临时文件已清理");
-
-  if (fs.existsSync(bootLogPath)) {
-    try { fs.unlinkSync(bootLogPath); } catch (e) {}
-  }
 
   const config = {
     log: { level: "panic" },
@@ -198,7 +195,8 @@ async function main() {
   webProc.unref();
   botProc.unref();
 
-  let domain = ARGO_DOMAIN;
+  let domain = ARGO_DOMAIN.trim();
+
   if (!domain && authTrim.length <= 30) {
     log("正在获取 Argo 临时域名...");
     for (let i = 0; i < 25; i++) {
@@ -234,18 +232,7 @@ async function main() {
     log("[错误！] 获取 Argo 临时域名失败，请检查 boot.log 日志内容！");
   }
 
-  if (fs.existsSync(bootLogPath)) {
-    try { fs.unlinkSync(bootLogPath); } catch (e) {}
-  }
 
-  if (fs.existsSync(webPath)) {
-    try {
-      fs.unlinkSync(webPath);
-      log("[磁盘清理] sing-box 运行中，磁盘空间已释放");
-    } catch (e) {
-      log(`[清理失败] 删除 web 文件出错: ${e.message}`);
-    }
-  }
   log("[引导完成] 守护进程持续运行中...");
   setInterval(() => {}, 2147483647);
 }
