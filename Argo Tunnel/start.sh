@@ -1,7 +1,48 @@
 #!/bin/sh
 
+
 export MALLOC_ARENA_MAX=2
 
-export NODE_OPTIONS="--max-old-space-size=48 --optimize-for-size"
+
+TOTAL_MEM_MB=0
+
+if [ -f /sys/fs/cgroup/memory.max ]; then
+
+    BYTES=$(cat /sys/fs/cgroup/memory.max 2>/dev/null)
+    if [ "$BYTES" != "max" ] && [ -n "$BYTES" ]; then
+        TOTAL_MEM_MB=$((BYTES / 1024 / 1024))
+    fi
+elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+
+    BYTES=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null)
+    if [ -n "$BYTES" ]; then
+        TOTAL_MEM_MB=$((BYTES / 1024 / 1024))
+    fi
+fi
+
+
+if [ -z "$TOTAL_MEM_MB" ] || [ "$TOTAL_MEM_MB" -eq 0 ] || [ "$TOTAL_MEM_MB" -gt 100000 ]; then
+    TOTAL_MEM_MB=$(free -m 2>/dev/null | awk '/Mem:/{print $2}')
+fi
+
+
+if [ -z "$TOTAL_MEM_MB" ] || [ "$TOTAL_MEM_MB" -eq 0 ]; then
+    TOTAL_MEM_MB=128
+fi
+
+
+if [ "$TOTAL_MEM_MB" -le 160 ]; then
+
+    export NODE_OPTIONS="--max-old-space-size=40 --optimize-for-size"
+elif [ "$TOTAL_MEM_MB" -le 320 ]; then
+
+    export NODE_OPTIONS="--max-old-space-size=80 --optimize-for-size"
+else
+
+    export NODE_OPTIONS="--max-old-space-size=128"
+fi
+
+echo "[启动脚本] 检测到当前容器/系统内存: ${TOTAL_MEM_MB}MB | NODE_OPTIONS: $NODE_OPTIONS"
+
 
 exec node index.js
