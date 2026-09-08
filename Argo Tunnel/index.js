@@ -49,7 +49,7 @@ try {
   const limitStr = fs.existsSync("/sys/fs/cgroup/memory.max") ? fs.readFileSync("/sys/fs/cgroup/memory.max", "utf-8") : fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf-8");
   containerMem = Math.floor(parseInt(limitStr.trim(), 10) / 1024 / 1024);
 } catch (e) {}
-const totalMemMB = Math.floor(os.totalmem() / 1024 / 1024);
+const totalMemMB = (containerMem > 0 && containerMem < 10000) ? containerMem : Math.floor(os.totalmem() / 1024 / 1024);
 
 let singboxMemLimit, cloudflaredMemLimit, dynamicGOGC, dynamicProcs;
 
