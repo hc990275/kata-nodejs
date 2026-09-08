@@ -4,7 +4,7 @@ const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定�
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
 const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2=稳定+低占用；quic=响应快+占用略高
-const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 建议连接数量 http2=4 或 quic=1（避免机房对UDP的QoS）
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 建议连接数量：http2=4 ， quic=2或1（以防UDP被机房QoS）
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.wto.org";                      // 优选域名/IP
@@ -49,35 +49,52 @@ try {
   const limitStr = fs.existsSync("/sys/fs/cgroup/memory.max") ? fs.readFileSync("/sys/fs/cgroup/memory.max", "utf-8") : fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf-8");
   containerMem = Math.floor(parseInt(limitStr.trim(), 10) / 1024 / 1024);
 } catch (e) {}
-const totalMemMB = (containerMem > 0 && containerMem < 100000) ? containerMem : Math.floor(os.totalmem() / 1024 / 1024);
+const totalMemMB = Math.floor(os.totalmem() / 1024 / 1024);
 
-let singboxMemLimit, cloudflaredMemLimit, dynamicGOGC;
-
+let singboxMemLimit, cloudflaredMemLimit, dynamicGOGC, dynamicProcs;
 
 if (totalMemMB <= 160) {
-  
-  singboxMemLimit = "45MiB";
-  cloudflaredMemLimit = "75MiB";
-  dynamicGOGC = process.env.GOGC || "80"; 
-} else if (totalMemMB <= 280) {
-  singboxMemLimit = "75MiB";
-  cloudflaredMemLimit = "120MiB";
-  dynamicGOGC = process.env.GOGC || "60";
-} else if (totalMemMB <= 380) {
-  singboxMemLimit = "100MiB";
+  singboxMemLimit = "35MiB";
+  cloudflaredMemLimit = "65MiB";
+  dynamicGOGC = "60";     
+  dynamicProcs = "1";     
+
+} else if (totalMemMB < 256) {
+  singboxMemLimit = "60MiB";
+  cloudflaredMemLimit = "110MiB";
+  dynamicGOGC = "90";
+  dynamicProcs = "1";
+
+} else if (totalMemMB < 320) {
+  singboxMemLimit = "80MiB";
   cloudflaredMemLimit = "150MiB";
-  dynamicGOGC = process.env.GOGC || "80";
-} else {
+  dynamicGOGC = "120";    
+  dynamicProcs = "2";     
+
+} else if (totalMemMB < 448) {
+  singboxMemLimit = "120MiB";
+  cloudflaredMemLimit = "200MiB";
+  dynamicGOGC = "130";
+  dynamicProcs = "2";
+
+} else if (totalMemMB < 576) {
   singboxMemLimit = "160MiB";
-  cloudflaredMemLimit = "260MiB";
-  dynamicGOGC = process.env.GOGC || "120";
+  cloudflaredMemLimit = "280MiB";
+  dynamicGOGC = "150";
+  dynamicProcs = "2";
+
+} else {
+  singboxMemLimit = "256MiB";
+  cloudflaredMemLimit = "512MiB";
+  dynamicGOGC = "200";    
+  dynamicProcs = process.env.GOMAXPROCS || "4"; 
 }
 
 const GO_BASE_ENV = {
   ...process.env,
   GODEBUG: "madvdontneed=1,cgocheck=0",
-  GOMAXPROCS: totalMemMB <= 160 ? "1" : (process.env.GOMAXPROCS || "2"),
-  GOGC: dynamicGOGC
+  GOMAXPROCS: process.env.GOMAXPROCS || dynamicProcs,
+  GOGC: process.env.GOGC || dynamicGOGC
 };
 
 const isFixedTunnelEnv = ARGO_AUTH.trim().length > 30 || ARGO_DOMAIN.trim().length > 0;
