@@ -4,7 +4,7 @@ const ARGO_DOMAIN = process.env.ARGO_DOMAIN || "";                   // 固定�
 const ARGO_AUTH = process.env.ARGO_AUTH || "";                       // 固定隧道Token（留空=临时隧道）
 
 const ARGO_PROTOCOL = process.env.ARGO_PROTOCOL || "quic";           // http2=稳定+低占用；quic=响应快+占用略高
-const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "4";        // 隧道默认连接数量4（quic+128MB内存，建议1）
+const ARGO_CONNECTIONS = process.env.ARGO_CONNECTIONS || "1";        // 建议连接数量 http2=4 或 quic=1（避免机房对UDP的QoS）
 
 const ARGO_PORT = process.env.ARGO_PORT || 8001;                     // Cloudflare回源端口，与服务URL末尾端口一致
 const CFIP = process.env.CFIP || "www.wto.org";                      // 优选域名/IP
@@ -50,32 +50,60 @@ try {
   containerMem = Math.floor(parseInt(limitStr.trim(), 10) / 1024 / 1024);
 } catch (e) {}
 const totalMemMB = (containerMem > 0 && containerMem < 100000) ? containerMem : Math.floor(os.totalmem() / 1024 / 1024);
+
 let singboxMemLimit, cloudflaredMemLimit, dynamicGOGC;
 
-if (totalMemMB < 200) {
-  singboxMemLimit = "30MiB";
-  cloudflaredMemLimit = "55MiB";
-  dynamicGOGC = process.env.GOGC || "30";
-} else if (totalMemMB <= 350) {
-  singboxMemLimit = "65MiB";
-  cloudflaredMemLimit = "110MiB";
+
+if (totalMemMB <= 160) {
+  
+  singboxMemLimit = "45MiB";
+  cloudflaredMemLimit = "75MiB";
+  dynamicGOGC = process.env.GOGC || "80"; 
+} else if (totalMemMB <= 280) {
+  singboxMemLimit = "75MiB";
+  cloudflaredMemLimit = "120MiB";
   dynamicGOGC = process.env.GOGC || "60";
+} else if (totalMemMB <= 380) {
+  singboxMemLimit = "100MiB";
+  cloudflaredMemLimit = "150MiB";
+  dynamicGOGC = process.env.GOGC || "80";
 } else {
-  singboxMemLimit = "120MiB";
-  cloudflaredMemLimit = "200MiB";
-  dynamicGOGC = process.env.GOGC || "100";
+  singboxMemLimit = "160MiB";
+  cloudflaredMemLimit = "260MiB";
+  dynamicGOGC = process.env.GOGC || "120";
 }
 
 const GO_BASE_ENV = {
   ...process.env,
   GODEBUG: "madvdontneed=1,cgocheck=0",
+  GOMAXPROCS: totalMemMB <= 160 ? "1" : (process.env.GOMAXPROCS || "2"),
   GOGC: dynamicGOGC
 };
 
-const rawUUID = process.env.UUID || (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-  const r = (Math.random() * 16) | 0;
-  return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
-}));
+const isFixedTunnelEnv = ARGO_AUTH.trim().length > 30 || ARGO_DOMAIN.trim().length > 0;
+const uuidFilePath = path.join(FILE_PATH, "uuid.txt");
+
+let rawUUID = process.env.UUID;
+
+if (isFixedTunnelEnv && !rawUUID && fs.existsSync(uuidFilePath)) {
+  try {
+    rawUUID = fs.readFileSync(uuidFilePath, "utf-8").trim();
+  } catch (e) {}
+}
+
+if (!rawUUID) {
+  rawUUID = (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  }));
+
+  if (isFixedTunnelEnv) {
+    try {
+      if (!fs.existsSync(FILE_PATH)) fs.mkdirSync(FILE_PATH, { recursive: true });
+      fs.writeFileSync(uuidFilePath, rawUUID, "utf-8");
+    } catch (e) {}
+  }
+}
 
 const UUID = rawUUID.toLowerCase();
 const WS_PATH = `/${UUID}-vless`;
